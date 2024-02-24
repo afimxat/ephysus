@@ -1,19 +1,23 @@
 classdef PositionData < neuro.basic.ChannelTimeData & ...
         matlab.mixin.indexing.RedefinesParen
-    %POSITIONDATA Summary of this class goes here
-    %   Detailed explanation goes here
+    %POSITIONDATA Class for representing positional data in a 3D space over time.
+    % This class stores the X, Y, Z coordinates and time information, and provides
+    % methods for manipulating and accessing the position data.
 
     properties
-        units
-        Info
+        units % Units of measurement for the positional data (e.g., 'cm', 'meters').
+        Info % Additional information about the position data.
     end
 
     methods
         function obj = PositionData(X,Y,Z,time)
             %PositionData Construct an instance of this class
-            %   ticd should be in TimeIntervalCombined foormat
+            % Inputs:
+            %   X, Y, Z: Arrays of coordinates in their respective dimensions.
+            %   time: A TimeIntervalCombined object representing the time points for the data.
+            % The constructor initializes a PositionData object either by copying another PositionData object's properties,
+            % or by creating a new object with specified X, Y, Z, and time data, validating the input sizes.
             if nargin>0
-                % If the input X is already an instance of PositionData, copy its properties
                 if isa(X, 'optiTrack.PositionData')
                     obj.data = X.data;
                     obj.time = X.timeIntervalCombined;
@@ -21,56 +25,35 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
                     return;
                 end
 
-                % Validate the inputs
                 if numel(X) ~= numel(Y) || numel(Z) ~= numel(Y) || numel(X) ~= time.getNumberOfPoints()
                     error('Sizes of XYZ or time are not equal.');
                 end
 
-                % Set the data property
                 data = [X(:), Y(:), Z(:)];
                 obj.data = array2table(data, 'VariableNames', {'X', 'Y', 'Z'});
-
-                % Set the time property
                 obj.time = time;
-
-                % Set the units property
                 obj.units = 'cm';
             end
         end
+
         function [positionData, idx] = getWindow(obj, range)
-            % GETWINDOW Returns a new PositionData object and its corresponding index
-            %   for a specified time range.
-            %
-            %   Inputs:
-            %       obj         - a PositionData object
-            %       range       - a 2-element vector specifying the start and end times
-            %                     of the desired time range
-            %
-            %   Outputs:
-            %       positionData - a new PositionData object containing the data within the
-            %                      specified time range
-            %       idx          - the index of the data points within the specified time range
-
-            % Get the TimeIntervalData object associated with the PositionData object
+            % GETWINDOW Returns a subset of the PositionData within a specified time range.
+            % Inputs:
+            %   range: A 2-element vector [startTime endTime] specifying the time range.
+            % Outputs:
+            %   positionData: A new PositionData object for the specified time range.
+            %   idx: Indices of the data points within the specified time range.
             ticd = obj.time;
-
-            % Create a copy of the input PositionData object
             positionData = obj;
-
-            % Get the time window corresponding to the specified range
             window = ticd.getTimeIntervalForTimes(range);
-
-            % Update the time property of the new PositionData object
             positionData.time = window;
-
-            % Get the sample indices corresponding to the specified range
             samples = ticd.getSampleForClosest(range);
-
-            % Get the data points within the specified range
             idx = samples(1):samples(2);
             positionData.data = obj.data(idx,:);
         end
         function obj=plus(obj,pd)
+            % Overloads the plus operator to concatenate the data from another PositionData object
+            % to the current object, ensuring they are sequential in time and have matching sample rates.
             if obj.time.getEndTime>=pd.time.getStartTime
                 error(['Position data starts(%s) before the ' ...
                     'original ends(%s).'],pd.time.getStartTime, ...
@@ -86,19 +69,29 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             obj.data=newdata;
         end
         function data=getData(obj)
+            % Returns the data table of the PositionData object.
             data=obj.data;
         end
+
         function obj=setData(obj,data)
+            % Sets the data table of the PositionData object.
             obj.data=data;
         end
+
         function mat=flatten2(obj)
+            % Returns the first two rows of the data table, effectively "flattening" the data into 2D.
             mat=obj.data(1:2,:);
         end
+
         function mat=flatten3(obj)
+            % Returns the first three rows of the data table, keeping the data in 3D.
             mat=obj.data(1:3,:);
         end
-
         function pdman = getManifold(obj)
+            % Creates a manifold representation of the positional data and saves it to a file.
+            % This method applies dimensionality reduction and manifold learning techniques on the data.
+            % Refer to the method body for detailed operations including plotting and file saving.
+
             time = obj.time;
             timestr = matlab.lang.makeValidName(time.tostring);
             file1 = java.io.File(obj.source);
@@ -114,7 +107,7 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
                 return;
             else
                 manifoldFile1 = fullfile(char(file1.getParent), ...
-                ['position.PositionDataManifold' '*' '.mat']);
+                    ['position.PositionDataManifold' '*' '.mat']);
                 fs=dir(manifoldFile1);
                 if numel(fs)==1
                     s = load(fullfile(fs.folder,fs.name));
@@ -179,6 +172,11 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             save(manifoldFile, 'pdman', '-mat');
         end
         function [velocity] = getSpeed(obj, smoothingWindowInSeconds)
+            % Computes the speed from the positional data.
+            % Inputs:
+            %   smoothingWindowInSeconds: The window size for smoothing speed data.
+            % Outputs:
+            %   velocity: A Channel object representing the speed at each time point.
             data = table2array(obj.getData)';
             timeDiffSeconds = diff(seconds(obj.time.getTimePoints));
             timeDiffSeconds2=[timeDiffSeconds median(timeDiffSeconds)];
@@ -195,6 +193,11 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function [om]= getOccupancyMap(obj,xedges,zedges)
+            % Generates an occupancy map from the positional data.
+            % Inputs:
+            %   xedges, zedges: Bin edges for the X and Z dimensions.
+            % Outputs:
+            %   om: An OccupancyMap object representing the spatial occupancy.
             if nargin==1
                 om=neuro.placeField.OccupancyMap(obj,obj.time.getSampleRate);
             else
@@ -204,6 +207,8 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             om.Units=obj.units;
         end
         function ax = plot(obj)
+            % Plots the positional data over time.
+            % This method generates a plot of the position data, automatically downsampling if necessary.
             numPointsInPlot = 100000;
             time = obj.time;
             t_org = seconds(time.getTimePoints() - (time.getZeitgeberTime() - time.getStartTime()));
@@ -219,6 +224,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function ax = plot2D(obj, numPointsInPlot)
+            % Generates a 2D scatter plot of the position data, downsampling if specified.
+            % Input:
+            %   numPointsInPlot: The number of points to include in the plot, for downsampling.
             % Set default value for numPointsInPlot if not provided
             if nargin < 2
                 numPointsInPlot = 10000;
@@ -255,6 +263,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             colormap(colorMap);
         end
         function p = plot2DContinuous(obj, numPointsInPlot)
+            % Generates a 2D plot of the position data with continuous lines, downsampling if specified.
+            % Input:
+            %   numPointsInPlot: The number of points to include in the plot, for downsampling.
             if ~exist('numPointsInPlot','var')
                 numPointsInPlot=10000;
             end
@@ -281,6 +292,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             xlabel([dims{1} ' ' obj.units]);
         end
         function ax = plot3Dtime(obj, numPointsInPlot)
+            % Generates a 3D scatter plot of the position data over time, downsampling if specified.
+            % Input:
+            %   numPointsInPlot: The number of points to include in the plot, for downsampling.
             % Set default value for numPointsInPlot if not provided
             if nargin < 2
                 numPointsInPlot = 10000;
@@ -316,6 +330,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function ax = plot3DtimeContinuous(obj, numPointsInPlot)
+            % Generates a 3D plot of the position data over time with continuous lines, downsampling if specified.
+            % Input:
+            %   numPointsInPlot: The number of points to include in the plot, for downsampling.
             if ~exist('numPointsInPlot','var')
                 numPointsInPlot=10000;
             end
@@ -357,6 +374,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             % LineWidth=2,Color=colors(3,:));
         end
         function ax = plot3D(obj, numPointsInPlot)
+            % Generates a 3D scatter plot of the position data, downsampling if specified.
+            % Input:
+            %   numPointsInPlot: The number of points to include in the plot, for downsampling.
             if ~exist('numPointsInPlot','var')
                 numPointsInPlot=10000;
             end
@@ -377,6 +397,10 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             xlabel(dims{1});
         end
         function [] = plot3DMark(obj,mark,color)
+            % Plots markers on a 3D plot of the position data at specified indices.
+            % Inputs:
+            %   mark: Indices of the data points to mark.
+            %   color: Color of the markers.
             if ~exist('color','var')
                 color=[];
             end
@@ -397,7 +421,7 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
                 s=scatter3(data2(1,:),data2(2,:),data2(3,:),'filled', ...
                     'MarkerFaceAlpha',.5,'MarkerEdgeAlpha',.5,'SizeData',30);
             end
-                 if isempty(color)
+            if isempty(color)
                 s.MarkerFaceColor="k";
             end
             ylabel([dims{2} ' ' obj.units]);
@@ -405,6 +429,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
 
         end
         function [] = plot2DMark(obj,mark)
+            % Plots markers on a 2D scatter plot of the position data at specified indices.
+            % Input:
+            %   mark: Indices of the data points to mark.
             dims={'X','Z','Y'};
             data0=obj.getData;
             data1=table2array(data0(:,dims))';
@@ -418,8 +445,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
 
         end
         function obj = getTimeWindow(obj,timeWindow)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            % Selects a subset of the PositionData within a specified time window.
+            % Input:
+            %   timeWindow: A 2-element vector [startTime endTime] specifying the time window.
             ticd=obj.time;
             ticdnew=ticd.getTimeIntervalForTimes(timeWindow);
             s1=ticd.getSampleForClosest(ticdnew.getStartTime);
@@ -428,8 +456,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             obj.data=obj.data(s1:s2,:);
         end
         function obj = getDownsampled(obj,dsfactor)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            % Returns a downsampled version of the PositionData object.
+            % Input:
+            %   dsfactor: Downsample factor.
             data1=table2array(obj.data)';
             for idim=1:size(data1,1)
                 data1ds(idim,:)=downsample(medfilt1(data1(idim,:),dsfactor), ...
@@ -441,24 +470,30 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             obj.time=ticd.getDownsampled(dsfactor);
         end
         function obj = getMedianFiltered(obj,winseconds)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            % Applies a median filter to the positional data.
+            % Input:
+            %   winseconds: The window size for the median filter in seconds.
             data1=table2array(obj.data)';
             data2=smoothdata(data1,2,'movmedian',winseconds*obj.time.getSampleRate);
             obj.data=array2table(data2',"VariableNames", ...
                 obj.data.Properties.VariableNames);
         end
         function obj = getMeanFiltered(obj,winseconds)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            % Applies a mean filter to the positional data.
+            % Input:
+            %   winseconds: The window size for the mean filter in seconds.
             data1=table2array(obj.data)';
             data2=smoothdata(data1,2,'movmean',winseconds*obj.time.getSampleRate);
             obj.data=array2table(data2',"VariableNames", ...
                 obj.data.Properties.VariableNames);
         end
         function [data1,sample] = getPositionForTimes(obj,times)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            % Retrieves the position data for specified time points.
+            % Input:
+            %   times: An array of time points for which to retrieve data.
+            % Outputs:
+            %   data1: The position data for the specified time points.
+            %   sample: The indices of the data points corresponding to the specified times.
             if numel(times)>0
                 time=obj.time;
                 sample=time.getSampleForClosest(times);
@@ -470,6 +505,10 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function [obj, folder]= saveInPlainFormat(obj,folder,ext1)
+            % Saves the PositionData object in a plain text format.
+            % Inputs:
+            %   folder: The directory to save the files in.
+            %   ext1: The file extension for the position points data.
             if ~exist('ext1','var')
                 ext1='position.points.csv';
             end
@@ -494,6 +533,9 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
             %             obj=obj.loadPlainFormat(folder);
         end
         function obj= loadPlainFormat(obj,folder)
+            % Loads the PositionData object from plain text format files.
+            % Input:
+            %   folder: The directory containing the files.
             ext1='position.points.csv';
             extt='position.time.csv';
             [file1, uni]=obj.getFile(folder,ext1);
@@ -504,6 +546,13 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
                 fullfile(folder,[uni extt]));
         end
         function [file2, uni]=getFile(~,folder,extension)
+            % Helper method to retrieve files based on a specified extension.
+            % Inputs:
+            %   folder: The directory to search in.
+            %   extension: The file extension to search for.
+            % Outputs:
+            %   file2: The full path to the file found.
+            %   uni: A unique identifier derived from the file name.
             if ~exist('folder','var')
                 folder= pwd;
             end
@@ -528,6 +577,7 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
     end
     methods (Access=protected)
         function obj = parenReference(obj, indexOp)
+            % Overrides the default behavior for referencing elements using parentheses.
             try
                 idx=indexOp.Indices{:};
             catch ME
@@ -540,7 +590,7 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function obj = parenAssign(obj,indexOp,varargin)
-            % Ensure object instance is the first argument of call.
+            % Overrides the default behavior for assigning elements using parentheses.
             if isempty(obj)
                 obj = varargin{1};
             end
@@ -554,6 +604,7 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function n = parenListLength(obj,indexOp,ctx)
+            % Determines the number of elements in a list during a parenthetical reference operation.
             if numel(indexOp) <= 2
                 n = 1;
                 return;
@@ -563,11 +614,13 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function obj = parenDelete(obj,indexOp)
+            % Overrides the default behavior for deleting elements using parentheses.
             obj.ContainedArray.(indexOp) = [];
         end
     end
     methods
         function out = cat(dim,varargin)
+            % Overloads the cat function for concatenating arrays of this class.
             numCatArrays = nargin-1;
             newArgs = cell(numCatArrays,1);
             for ix = 1:numCatArrays
@@ -581,6 +634,7 @@ classdef PositionData < neuro.basic.ChannelTimeData & ...
         end
 
         function varargout = size(obj,varargin)
+            % Overloads the size function to provide the size of the data array.
             [varargout{1:nargout}] = [1 1];
         end
     end
