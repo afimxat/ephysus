@@ -1,0 +1,21 @@
+[submodule "external/buzcode"]
+	path = external/buzcode
+	url = https://github.com/buzsakilab/buzcode.git
+[submodule "external/CellExplorer"]
+	path = external/CellExplorer
+	url = https://github.com/petersenpeter/CellExplorer.git
+[submodule "external/circstat"]
+	path = external/circstat
+	url = https://github.com/circstat/circstat-matlab.git
+[submodule "external/fieldtrip"]
+	path = external/fieldtrip
+	url = https://github.com/fieldtrip/fieldtrip.git
+[submodule "external/fooof"]
+	path = external/fooof
+	url = https://github.com/fooof-tools/fooof_mat.git
+[submodule "external/open-ephys-tools"]
+	path = external/open-ephys-tools
+	url = https://github.com/open-ephys/open-ephys-matlab-tools.git
+[submodule "external/shadedErrorBar"]
+	path = external/shadedErrorBar
+	url = https://github.com/raacampbell/shadedErrorBar.git
